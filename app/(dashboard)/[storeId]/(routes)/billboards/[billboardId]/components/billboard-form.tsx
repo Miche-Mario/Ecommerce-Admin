@@ -13,46 +13,100 @@ import {
     FormLabel, 
     FormMessage
 } from '@/components/ui/form';
-import { Store } from '@prisma/client'
+import { BillBoard } from '@prisma/client'
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Separator } from "@/components/ui/separator"
+import toast from 'react-hot-toast';
+import axios from 'axios';
+import { useParams, useRouter } from 'next/navigation';
 
 
 import { Heading } from '@/components/heading';
-
-
-interface SettingsFormProps {
-    initialData : Store;
-}
+import { AlertModal } from '@/components/modals/alert.modal';
+import { ApiAlert } from '@/components/ui/api-alert';
+import { useOrigin } from '@/hooks/use-origin';
 
 const formSchema = z.object({
-    name: z.string().min(1)
+    label: z.string().min(1),
+    imageUrl: z.string().min(1)
 })
 
-type SettingsFormValues = z.infer<typeof formSchema>;
+
+type BillboardFormValues = z.infer<typeof formSchema>;
 
 
-export const SettingsForm: React.FC<SettingsFormProps> = ({
+interface BillboardFormProps {
+    initialData : BillBoard | null;
+}
+
+
+
+
+export const BillboardForm: React.FC<BillboardFormProps> = ({
     initialData
 }) => {
+    const params = useParams();
+    const router = useRouter();
+    const origin = useOrigin();
 
-    const [open, setOpen] = useState(false)
-    const [loading, setLoading] = useState(false)
 
-    const form = useForm<SettingsFormValues>({
+    const [open, setOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
+
+    const tilte = initialData ? "Edit Billboard" : "Create billboard";
+    const description = initialData ? "Edit a billboard" : "Add a new billboard";
+    const toastMessage = initialData ? "Billboard updated" : "Billboard create";
+
+
+
+    const form = useForm<BillboardFormValues>({
         resolver: zodResolver(formSchema),
-        defaultValues: initialData
+        defaultValues: initialData || {
+            label: '',
+            imageUrl: ''
+        }
     })
 
-    const onSubmit = async (data: SettingsFormValues) => {
-        console.log(data);
+    const onSubmit = async (data: BillboardFormValues) => {
+       try {
+            setLoading(true);
+            await axios.patch(`/api/stores/${params.storeId}`, data);
+            router.refresh();
+            toast.success('Store updated.')
+       } catch (error) {
+            toast.error('Something went wrong');
+       } finally {
+            setLoading(false)
+       }
         
+    }
+
+    const onDelete = async () => {
+        try {
+            setLoading(true);
+            await axios.delete(`/api/stores/${params.storeId}`);
+            router.refresh();
+            router.push("/");
+
+            toast.success("Store deleted.");
+        } catch (error) {
+            toast.error("Make sure you removed all products and categories first.")
+        } finally {
+            setLoading(false);
+            setOpen(false);
+        }
     }
 
     return (
         <>
+        <AlertModal 
+            isOpen={open}
+            onClose={() => setOpen(false)}
+            onConfirm={onDelete}
+            loading={loading}
+        />
             <div className='flex items-center justify-between'>
                 <Heading
                     title="Settings"
@@ -73,7 +127,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({
                     <div className='grid grid-cols-3 gap-8'>
                         <FormField
                             control={form.control}
-                            name="name"
+                            name="label"
                             render={({field}) => (
                                 <FormItem>
                                     <FormLabel>Name</FormLabel>
@@ -98,6 +152,12 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({
                     </Button>
                 </form>
             </Form>
+            <Separator/>
+            <ApiAlert
+                title='NEXT_PUBLIC_API_URL'
+                description={`${origin}/api/${params.storeId}`}
+                variant='public'
+            />
         </>
     )
 }
